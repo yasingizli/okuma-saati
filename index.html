@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minik Sincap - Sesli Okuma ve Ölçüm Aracı</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; color: #333; max-width: 700px; margin: 40px auto; padding: 20px; text-align: center; }
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; font-size: 24px; margin-bottom: 10px; }
+        .timer { font-size: 32px; font-weight: bold; color: #e74c3c; margin: 15px 0; }
+        .text-box { font-size: 20px; line-height: 2; text-align: left; background: #fafafa; padding: 20px; border-radius: 10px; border: 1px solid #ddd; margin: 20px 0; max-height: 250px; overflow-y: auto; }
+        .word { padding: 2px 4px; border-radius: 4px; transition: background 0.2s; }
+        .word.active { background: #ffeaa7; font-weight: bold; color: #d35400; border-bottom: 2px solid #f39c12; }
+        .word.read { color: #27ae60; }
+        button { background: #3498db; color: white; border: none; padding: 12px 25px; font-size: 18px; border-radius: 8px; cursor: pointer; transition: 0.2s; font-weight: bold; }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .results { margin-top: 20px; font-size: 18px; background: #e8f8f5; padding: 15px; border-radius: 8px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>🌰 Minik Sincap Fındık - Okuma Ölçüm Aracı</h1>
+    <p>Başlata bas ve metni sesli olarak oku. 60 saniye sonunda sistem nerede kaldığını otomatik gösterecek.</p>
+    
+    <div class="timer" id="timer">60 sn</div>
+
+    <div class="text-box" id="textBox">
+        Bir zamanlar, kocaman meşe ağaçlarıyla dolu yeşil bir ormanda Minik Sincap Fındık yaşardı. Fındık, çok meraklı ve neşeli bir sincaptı. Her sabah ormanda gezinmeyi, yüksek dallardan zıplamayı ve yeni şeyler öğrenmeyi çok severdi. Güneşli bir sonbahar sabahı, Fındık kurumuş yaprakların arasında oynarken parıldayan küçük bir kâğıt parçası fark etti.
+    </div>
+
+    <button id="startBtn" onclick="startReading()">Mikrofonu Aç ve Başla</button>
+
+    <div class="results" id="resultBox">
+        <h3>🎉 Ölçüm Tamamlandı!</h3>
+        <p id="statsText"></p>
+    </div>
+</div>
+
+<script>
+    const rawText = "Bir zamanlar kocaman meşe ağaçlarıyla dolu yeşil bir ormanda Minik Sincap Fındık yaşardı Fındık çok meraklı ve neşeli bir sincaptı Her sabah ormanda gezinmeyi yüksek dallardan zıplamayı ve yeni şeyler öğrenmeyi çok severdi Güneşli bir sonbahar sabahı Fındık kurumuş yaprakların arasında oynarken parıldayan küçük bir kâğıt parçası fark etti";
+    const cleanWords = rawText.split(" ");
+    
+    const textBox = document.getElementById("textBox");
+    textBox.innerHTML = cleanWords.map((w, i) => `<span class="word" id="w-${i}">${w}</span>`).join(" ");
+
+    let timeLeft = 60;
+    let timerInterval = null;
+    let recognition = null;
+    let currentIndex = 0;
+
+    function startReading() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            alert("Tarayıcınız ses tanımayı desteklemiyor. Lütfen Google Chrome veya Microsoft Edge kullanın.");
+            return;
+        }
+
+        document.getElementById("startBtn").disabled = true;
+        document.getElementById("resultBox").style.display = "none";
+        currentIndex = 0;
+        timeLeft = 60;
+        document.getElementById("timer").innerText = timeLeft + " sn";
+
+        // Tüm kelime stillerini sıfırla
+        document.querySelectorAll('.word').forEach(el => el.className = "word");
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'tr-TR';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onresult = (event) => {
+            let transcript = "";
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                transcript += event.results[i][0].transcript;
+            }
+            
+            // Söylenen kelimeleri diziye çevir
+            let spokenWords = transcript.trim().toLowerCase().split(/\s+/);
+            
+            // Kelime eşleştirme mantığı
+            if (spokenWords.length > 0) {
+                let matchCount = 0;
+                for (let i = 0; i < spokenWords.length; i++) {
+                    if (currentIndex + matchCount < cleanWords.length) {
+                        let targetWord = cleanWords[currentIndex + matchCount].toLowerCase().replace(/[.,]/g, '');
+                        let spokenWord = spokenWords[i].replace(/[.,]/g, '');
+                        
+                        if (targetWord === spokenWord) {
+                            matchCount++;
+                        }
+                    }
+                }
+                
+                if (matchCount > 0) {
+                    for (let k = 0; k < matchCount; k++) {
+                        if (currentIndex < cleanWords.length) {
+                            document.getElementById(`w-${currentIndex}`).className = "word read";
+                            currentIndex++;
+                        }
+                    }
+                    if (currentIndex < cleanWords.length) {
+                        document.getElementById(`w-${currentIndex}`).className = "word active";
+                    }
+                }
+            }
+        };
+
+        recognition.onerror = (e) => { console.log("Ses tanıma hatası: ", e.error); };
+        recognition.onend = () => { if (timeLeft > 0) { try { recognition.start(); } catch(e){} } };
+
+        recognition.start();
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById("timer").innerText = timeLeft + " sn";
+            if (timeLeft <= 0) {
+                stopReading();
+            }
+        }, 1000);
+    }
+
+    function stopReading() {
+        clearInterval(timerInterval);
+        if (recognition) {
+            recognition.stop();
+        }
+        document.getElementById("startBtn").disabled = false;
+        
+        let successCount = document.querySelectorAll('.word.read').length;
+        document.getElementById("resultBox").style.display = "block";
+        document.getElementById("statsText").innerHTML = `Dakikadaki Doğru Okunan Kelime Sayısı (WCPM): <b>${successCount}</b>`;
+    }
+</script>
+
+</body>
+</html>
